@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Presensi Pelantikan</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+  <style>
+    ::-webkit-scrollbar { width: 8px; height: 8px; }
+    ::-webkit-scrollbar-track { background: #f1f1f1; border-radius: 4px; }
+    ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+    ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+    @media print {
+      .no-print { display: none !important; }
+      .print-only { display: block !important; }
+      #dataTable { width: 100%; border-collapse: collapse; margin-top: 15px; }
+      #dataTable th, #dataTable td { border: 1px solid #000 !important; padding: 8px !important; font-size: 11pt !important; color: #000 !important; text-align: left; }
+      #dataTable th { background-color: #e5e5e5 !important; -webkit-print-color-adjust: exact; text-align: center; }
+    }
+  </style>
+</head>
+<body class="bg-slate-50 min-h-screen font-sans text-slate-800">
+
+  <div class="hidden print-only text-center border-b-2 border-black pb-4 mb-6 mt-4">
+    <h2 class="text-xl font-bold uppercase m-0">Laporan Presensi Kehadiran</h2>
+    <p class="text-sm m-0" id="printDate"></p>
+  </div>
+
+  <header class="bg-white shadow-sm border-b border-slate-200 sticky top-0 z-10 no-print">
+    <div class="max-w-7xl mx-auto px-4 py-4 flex flex-col md:flex-row justify-between items-center gap-4">
+      <div>
+        <h1 class="text-2xl font-bold text-slate-900 tracking-tight">Presensi Pelantikan</h1>
+      </div>
+      <div class="flex w-full md:w-auto gap-3">
+        <input type="text" id="searchInput" onkeyup="applyFilters()" placeholder="Cari Instansi/Nama..." class="w-full px-4 py-2 rounded-lg border border-slate-300 focus:outline-none focus:ring-2 focus:ring-blue-500">
+        <button onclick="cetakLaporan()" class="px-4 py-2 bg-slate-800 text-white rounded-lg hover:bg-slate-900 font-medium">Cetak</button>
+      </div>
+    </div>
+  </header>
+
+  <main class="max-w-7xl mx-auto px-4 py-8">
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8 no-print">
+      <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-5 cursor-pointer" onclick="filterByStatus('all')">
+        <p class="text-xs font-medium text-slate-500">Total Pejabat</p><p class="text-2xl font-bold" id="dashTotal">0</p>
+      </div>
+      <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-5 cursor-pointer" onclick="filterByStatus('all')">
+        <p class="text-xs font-medium text-slate-500">Total Instansi</p><p class="text-2xl font-bold text-purple-600" id="dashInstansi">0</p>
+      </div>
+      <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-5 cursor-pointer" onclick="filterByStatus('Hadir')">
+        <p class="text-xs font-medium text-slate-500">Sudah Hadir</p><p class="text-2xl font-bold text-emerald-600" id="dashHadir">0</p>
+      </div>
+      <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-5 cursor-pointer" onclick="filterByStatus('Belum Hadir')">
+        <p class="text-xs font-medium text-slate-500">Belum Hadir</p><p class="text-2xl font-bold text-amber-600" id="dashBelum">0</p>
+      </div>
+    </div>
+
+    <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+      <div class="overflow-x-auto">
+        <table class="w-full text-left border-collapse" id="dataTable">
+          <thead>
+            <tr class="bg-slate-50 border-b border-slate-200 text-sm text-slate-500">
+              <th class="px-6 py-4 font-semibold w-12 text-center">No</th>
+              <th class="px-6 py-4 font-semibold w-1/3">Instansi / Unit Kerja</th>
+              <th class="px-6 py-4 font-semibold">Nama Pejabat</th>
+              <th class="px-6 py-4 font-semibold text-center">Status</th>
+              <th class="px-6 py-4 font-semibold text-right no-print">Aksi</th>
+            </tr>
+          </thead>
+          <tbody id="tableBody" class="divide-y divide-slate-100"></tbody>
+        </table>
+      </div>
+    </div>
+  </main>
+
+  <script>
+    // MASUKKAN URL WEB APP ANDA DI SINI
+    const API_URL = "https://script.google.com/macros/s/AKfycbxszyYUkd-fUUqheHpgGAc8G2sjOEAb4zNe5MpvRiS-PlnV6mqOJsF5eQJVmtpTmPBC/exec";
+    
+    let tamuData = [];
+    let activeStatusFilter = "all";
+
+    document.addEventListener("DOMContentLoaded", () => {
+      document.getElementById('printDate').innerText = 'Tanggal: ' + new Date().toLocaleDateString('id-ID');
+      loadData();
+    });
+
+    function loadData() {
+      Swal.fire({ title: 'Memuat Database...', allowOutsideClick: false, didOpen: () => { Swal.showLoading(); }});
+      
+      fetch(API_URL)
+        .then(res => res.json())
+        .then(data => {
+          tamuData = data;
+          renderTable();
+          updateDashboard();
+          Swal.close();
+        })
+        .catch(err => Swal.fire('Gagal!', err.message, 'error'));
+    }
+
+    function renderTable() {
+      const tbody = document.getElementById('tableBody');
+      tbody.innerHTML = '';
+      tamuData.forEach((item, index) => {
+        const isHadir = item.status === 'Hadir';
+        const badge = isHadir ? `<span class="px-2 py-1 rounded-full text-xs font-medium bg-emerald-100 text-emerald-800">Hadir</span><br><span class="text-[10px] text-slate-500">${item.waktu}</span>` : `<span class="px-2 py-1 rounded-full text-xs font-medium bg-amber-100 text-amber-800">Belum Hadir</span>`;
+        const btn = isHadir ? `<button disabled class="px-4 py-2 text-sm rounded bg-slate-100 text-slate-400">Selesai</button>` : `<button onclick="konfirmasiHadir(${item.row}, ${item.id}, '${item.nama}')" class="px-4 py-2 text-sm rounded bg-blue-600 text-white">Hadir</button>`;
+        
+        tbody.innerHTML += `
+          <tr class="hover:bg-slate-50 border-b border-slate-100" data-status="${item.status}" data-text="${item.nama.toLowerCase()} ${item.instansi.toLowerCase()}">
+            <td class="px-6 py-4 text-center text-sm">${index + 1}</td>
+            <td class="px-6 py-4 text-sm font-semibold text-blue-700">${item.instansi}</td>
+            <td class="px-6 py-4 text-sm font-medium">${item.nama}</td>
+            <td class="px-6 py-4 text-center">${badge}</td>
+            <td class="px-6 py-4 text-right no-print">${btn}</td>
+          </tr>`;
+      });
+      applyFilters();
+    }
+
+    function konfirmasiHadir(rowIndex, dataId, nama) {
+      Swal.fire({ title: 'Konfirmasi', html: `Bapak/Ibu <b>${nama}</b> hadir?`, showCancelButton: true, confirmButtonText: 'Hadir' })
+      .then((result) => {
+        if (result.isConfirmed) {
+          Swal.fire({ title: 'Menyimpan...', didOpen: () => { Swal.showLoading(); }});
+          
+          fetch(API_URL + "?action=update&row=" + rowIndex)
+            .then(res => res.json())
+            .then(res => {
+              const idx = tamuData.findIndex(t => t.id === dataId);
+              if(idx !== -1) { tamuData[idx].status = 'Hadir'; tamuData[idx].waktu = res.time; }
+              renderTable(); updateDashboard();
+              Swal.fire({ icon: 'success', title: 'Terkonfirmasi!', timer: 1000, showConfirmButton: false });
+            }).catch(err => Swal.fire('Gagal!', err.message, 'error'));
+        }
+      });
+    }
+
+    function filterByStatus(status) { activeStatusFilter = status; applyFilters(); }
+    
+    function applyFilters() {
+      const input = document.getElementById('searchInput').value.toLowerCase();
+      document.querySelectorAll('#tableBody tr').forEach(tr => {
+        const matchText = tr.getAttribute('data-text').includes(input);
+        const matchStatus = activeStatusFilter === 'all' || tr.getAttribute('data-status').includes(activeStatusFilter);
+        tr.style.display = matchText && matchStatus ? "" : "none";
+      });
+    }
+
+    function updateDashboard() {
+      const hadir = tamuData.filter(t => t.status === 'Hadir').length;
+      document.getElementById("dashTotal").innerText = tamuData.length;
+      document.getElementById("dashInstansi").innerText = [...new Set(tamuData.map(t => t.instansi))].length;
+      document.getElementById("dashHadir").innerText = hadir;
+      document.getElementById("dashBelum").innerText = tamuData.length - hadir;
+    }
+
+    function cetakLaporan() { window.print(); }
+  </script>
+</body>
+</html>
